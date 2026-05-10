@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>RoomTalk 聊天室主页</title>
+    <style>
+        /* 基础样式 */
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+        }
+
+        /* 创建房间按钮 */
+        #createRoomBtn {
+            padding: 10px 20px;
+            font-size: 16px;
+            background: #409eff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        #createRoomBtn:hover {
+            background: #337ecc;
+        }
+
+        /* 弹窗遮罩层 */
+        .modal {
+            display: none; /* 默认隐藏 */
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 弹窗内容 */
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            width: 350px;
+            text-align: center;
+        }
+
+        /* 输入框 & 按钮 */
+        input {
+            width: 80%;
+            padding: 8px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        .confirmBtn {
+            padding: 8px 20px;
+            background: #67c23a;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .cancelBtn {
+            padding: 8px 20px;
+            background: #909399;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <button id="createRoomBtn">创建房间</button>
+
+    <!-- 点击创建房间后的事件界面 -->
+    <div id="createModal" class="modal">
+        <div class="modal-content">
+            <p>创建新房间</p>
+            <input type="text" id="roomName" placeholder="房间名称（可选）">
+            <button class="confirmBtn" onclick="createRoom()">确认创建</button>
+            <button class="cancelBtn" onclick="closeModal()">取消创建</button>
+        </div>
+    </div>
+
+    <button id="refreshBtn">刷新房间列表</button>
+
+    <div class="room_list">
+        <h3>房间列表</h3>
+        <ul id="room_list"></ul>
+    </div>
+
+    <script>
+        // 房间列表
+        let room_list = []
+
+        // 前端连接 websocket
+        const ws = new WebSocket("ws://" + window.location.hostname + ":10000");
+        // 连接成功
+        ws.onopen = function() {
+            console.log("WebSocket 连接成功");
+            ws.send(JSON.stringify({
+                "type": "synchro_room_list",
+                "data": {
+
+                }
+            }))
+        };
+        // 拿到 弹窗
+        const modal = document.getElementById("createModal");
+        // 拿到 按钮
+        const createBtn = document.getElementById("createRoomBtn");
+
+        // 接收后端消息
+        ws.onmessage = function(evt) {
+            const data = JSON.parse(evt.data);
+            console.log("后端返回：", data);
+
+            // 处理后端返回的消息
+            switch(data.type) {
+                case "create_room_success":
+                    const newRoom = {
+                        room_id: data.data.room_id,
+                        room_name: data.data.room_name
+                    };
+                    room_list.push(newRoom); // 前端自己加！不用等后端
+                    renderRoomList();       // 刷新列表
+                    alert("创建房间成功！");
+                break;
+                case "create_room_fail":
+                    alert("创建房间失败")
+                    break;
+                case "room_list":
+                    // 数据同步
+                    room_list = data.data.rooms;
+                    renderRoomList();   // 渲染列表
+                    break;
+            }
+
+        };
+
+        // 点击按钮 → 弹出窗口
+        createBtn.onclick = function() {
+            modal.style.display = "flex";
+        }
+
+        // 确认创建
+        function createRoom() {
+            if (ws.readyState !== WebSocket.OPEN) {
+                alert("WebSocket 未连接，请稍后再试");
+                return;
+            }
+            let roomName = document.getElementById("roomName").value;   // 获取用户输入的房间名
+            closeModal();   // 关闭弹窗
+
+            // 发送给后端 → 固定格式
+            ws.send(JSON.stringify({
+                type: "create_room",        // 类型：创建房间
+                data: {
+                    user_id: "张三",
+                    room_name: roomName     // 传给后端的数据
+                }
+            }));
+        }
+
+        // 关闭弹窗
+        function closeModal() {
+            modal.style.display = "none";
+        }
+
+        // 房间列表展示
+        function renderRoomList() {
+            const ul = document.getElementById("room_list");
+            ul.innerHTML = "";  // 清空列表数据
+
+            room_list.forEach(room => {
+                // 创建列表项
+                const li = document.createElement("li");
+
+                // 将列表项渲染到列表中
+                li.innerText = `房间号：${room.room_id}：${room.room_name}`;
+                
+                // 
+
+                ul.appendChild(li);
+            })
+        }
+        
+        // 点击刷新 → 才拉全量列表
+        document.getElementById("refreshBtn").onclick = function() {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    "type": "synchro_room_list",
+                    "data": {
+                        
+                    }
+                }));
+            }
+        };
+    </script>
+</body>
+</html>

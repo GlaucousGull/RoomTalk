@@ -9,7 +9,7 @@ from settings import settings
 from room import Room
 
 # 创建专属日志
-logger = logging.getLogger("room_manager")
+logger = logging.getLogger(__name__)
 
 class RoomManager:
     # 私有化实例，不允许外部访问
@@ -17,7 +17,7 @@ class RoomManager:
 
     # 禁用 构造函数，不允许外部创建对象
     def __init__(self):
-        logger.error("禁止创建 RooMenager 对象，请使用 .instance")
+        logger.error("禁止创建 RoomManager 对象，请使用 .instance")
 
     # 单例构造方法
     def _init(self):
@@ -101,11 +101,18 @@ class RoomManager:
             del self.room_list[room_id]
             logger.info(f"删除房间成功: {room_id}")
 
+    # 获取房间列表
+    def get_room_list(self):
+        return self.room_list
+
+    # 获取房间数
+    def get_room_count(self):
+        return len(self.room_list)
 
 roommanager = RoomManager.instance()
 
 if __name__ == "__main__":
-    from utils import init_root_logger
+    from backend.utils import init_root_logger
     init_root_logger()  # 必须先初始化日志！
 
     print("=" * 60)

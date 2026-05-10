@@ -31,5 +31,5 @@ class Room:
         return self.user_list
 
     # 获取房间用户数
-    def get_user_conut(self):
+    def get_user_count(self):
         return len(self.user_list)
