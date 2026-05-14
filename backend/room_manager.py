@@ -1,4 +1,4 @@
-
+# room_manager.py
 import random
 import logging
 
@@ -33,7 +33,7 @@ class RoomManager:
             cls.__instance._init()
             return cls.__instance
 
-    def get_room_number(self):
+    def get_room_number(self) -> int:
         """
         生成一个不在 room_list 中的随机房间号
         无限尝试，直到找到可用的
@@ -75,13 +75,13 @@ class RoomManager:
     """
 
     # 创建房间
-    def create_room(self, user_id = ""):
+    def create_room(self, user_id = "", room_type = 0, password = None) -> int:
         # 获取随机房间号
         room_number = self.get_room_number()
         if not room_number:
             logger.error("房间创建失败")
             return None
-        self.room_list[room_number] = Room(room_number)
+        self.room_list[room_number] = Room(room_number,  str(room_number), room_type, password)
 
         # 向房间成员列表添加房间创建者
         self.room_list[room_number].add_user(user_id)
@@ -90,7 +90,7 @@ class RoomManager:
         return room_number
     
     # 根据房间号查找并返回房间对象
-    def get_room_object(self, room_id):
+    def get_room_object(self, room_id) -> Room:
         if room_id not in self.room_list:
             return None
         return self.room_list[room_id]
@@ -102,11 +102,11 @@ class RoomManager:
             logger.info(f"删除房间成功: {room_id}")
 
     # 获取房间列表
-    def get_room_list(self):
+    def get_room_list(self) -> list[Room]:
         return self.room_list
 
     # 获取房间数
-    def get_room_count(self):
+    def get_room_count(self) -> int:
         return len(self.room_list)
 
 roommanager = RoomManager.instance()
