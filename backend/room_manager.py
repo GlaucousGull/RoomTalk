@@ -77,11 +77,11 @@ class RoomManager:
     # 创建房间
     def create_room(self, user_id = "", room_type = 0, password = None) -> int:
         # 获取随机房间号
-        room_number = self.get_room_number()
+        room_number = str(self.get_room_number())
         if not room_number:
             logger.error("房间创建失败")
             return None
-        self.room_list[room_number] = Room(room_number,  str(room_number), room_type, password)
+        self.room_list[room_number] = Room(str(room_number),  str(room_number), int(room_type), password)
 
         # 向房间成员列表添加房间创建者
         self.room_list[room_number].add_user(user_id)
@@ -90,7 +90,7 @@ class RoomManager:
         return room_number
     
     # 根据房间号查找并返回房间对象
-    def get_room_object(self, room_id) -> Room:
+    def get_room_object(self, room_id: str) -> Room:
         if room_id not in self.room_list:
             return None
         return self.room_list[room_id]

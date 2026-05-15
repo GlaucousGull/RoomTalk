@@ -44,39 +44,39 @@ async def user_online(ws):
 
 # 创建房间请求回调
 async def handler_create_room(websocket, data):
-    # 1. 统一获取参数
+    # 统一获取参数
     user_id    = data.get("user_id", "")
     room_name  = data.get("room_name", "").strip()  # 直接清理空白
     room_type  = data.get("room_type", "")
     password   = data.get("password", "")
 
-    # 2. 基础校验
+    # 基础校验
     if not user_id:
         await websocket.send(json.dumps({"type": "create_room_fail", "data": {}}))
         return
 
-    # 3. 创建房间
+    # 创建房间
     room_id = roommanager.create_room(user_id, room_type, password)
     if not room_id:
         await websocket.send(json.dumps({"type": "create_room_fail", "data": {}}))
         return
 
-    # 4. 获取房间对象
+    # 获取房间对象
     room = roommanager.get_room_object(room_id)
     if not room:
         await websocket.send(json.dumps({"type": "create_room_fail", "data": {}}))
         return
 
-    # 5. 设置房间名称（空则使用房间号）
+    # 设置房间名称（空则使用房间号）
     final_room_name = room_name if room_name else str(room_id)
     room.set_room_name(final_room_name)
 
-    # 6. 设置房间类型 + 密码（私域）
+    # 设置房间类型 + 密码（私域）
     room.set_room_type(room_type)
     if room_type == "1":
         room.set_password(password)
 
-    # 7. 日志输出
+    # 日志输出
     if room_type == "1":
         logger.info("私域房间创建成功")
     elif room_type == "0":
@@ -84,7 +84,7 @@ async def handler_create_room(websocket, data):
     else:
         logger.warning("未知房间类型")
 
-    # 8. 返回成功消息
+    # 返回成功消息
     await websocket.send(json.dumps({
         "type": "create_room_success",
         "data": {
@@ -96,14 +96,16 @@ async def handler_create_room(websocket, data):
 
 # 给客户端同步现有房间列表
 async def handler_sync_room_list(websocket, data):
-    room_dict = roommanager.get_room_list()
+    room_id_list = roommanager.get_room_list()
 
     # 构造给客户端的json数据
     room_list_for_front = []
-    for room_id, room_obj in room_dict.items():
+    for room_id in room_id_list:
+        room = roommanager.get_room_object(room_id)
         room_list_for_front.append({
-            "room_id": room_id,
-            "room_name": room_obj.room_name
+            "room_id": room.get_room_id(),
+            "room_name": room.get_room_name(),
+            "room_type": room.get_room_type()
         })
 
     # 给前端发送数据
@@ -125,9 +127,17 @@ async def handler_join_room(websocket, data):
     """
     room_id = data.get("room_id")
     user_id = data.get("user_id")
-    room_type_data = data.get("room_type_data")
     # 查找对应的房间
     room = roommanager.get_room_object(room_id)
+
+    if not room:
+        logger.debug(f"房间号：{room_id}, 房间号类型:{type(room_id).__name__}")
+        # print(f"房间号：{room_id}, 房间号类型:{type(room_id).__name__}")
+        await websocket.send(json.dumps({
+            "type": "join_room_fail",
+            "data": {"msg": "房间不存在"}
+        }))
+        return
 
     room_type =  room.get_room_type()
 
@@ -137,12 +147,24 @@ async def handler_join_room(websocket, data):
         case '0': # 公域房间
             room.add_user(user_id) # 向房间成员列表添加新成员
         case '1': # 私域房间
-            if not room.compare_password(room_type_data.get("password")):
+            if not room.compare_password(data.get("password")):
                 is_join = False
             room.add_user(user_id)
         case _:
             logger.warning("警告！未知的房间类型")
+            is_join = False
     
+    if not is_join:
+        await websocket.send(json.dumps({
+            "type": "join_room_fail",
+            "data": {
+                "msg": "私域房间密码错误"
+            }
+        }))
+
+    # 将用户添加到房间列表中
+    room.add_user(user_id)
+
     # 获取历史消息
     historical_message = room.get_historical_message()
 
@@ -152,44 +174,49 @@ async def handler_join_room(websocket, data):
         msg_user_id, msg = msg_tuple
         # 查找用户名称
         user_name = usermanager.get_user_name(msg_user_id)
-        msg_body.append({"user_id": msg_user_id, "user_name": user_name, "msg": msg})
+        msg_body.append({
+            "user_id": msg_user_id,
+            "user_name": user_name,
+            "body": msg,
+            })
 
     # 获取房间人数
     online_users = room.get_user_count()
 
     # 向前端发送消息
     if is_join:
-        # await websocket.send(json.dumps({
-        #     "type": "join_room_success",
-        #     "data": {
-        #         "his_msg": msg_body,
-        #         "online_users": online_users
-        #     }
-        # }))
         await websocket.send(json.dumps({
             "type": "join_room_success",
             "data": {
                 "room_name": room.get_room_name(),
-                "his_msg": [
-                    {
-                        "user_id": "0001",
-                        "user_name": "张三",
-                        "body": "大家好，我是张三～"
-                    },
-                    {
-                        "user_id": "0002",
-                        "user_name": "李四",
-                        "body": "哈喽哈喽！"
-                    },
-                    {
-                        "user_id": user_id,
-                        "user_name": "我自己",
-                        "body": "我进来啦！"
-                    }
-                ],
+                "his_msg": msg_body,
                 "online_users": online_users
             }
         }))
+        # await websocket.send(json.dumps({
+        #     "type": "join_room_success",
+        #     "data": {
+        #         "room_name": room.get_room_name(),
+        #         "his_msg": [
+        #             {
+        #                 "user_id": "0001",
+        #                 "user_name": "张三",
+        #                 "body": "大家好，我是张三～"
+        #             },
+        #             {
+        #                 "user_id": "0002",
+        #                 "user_name": "李四",
+        #                 "body": "哈喽哈喽！"
+        #             },
+        #             {
+        #                 "user_id": user_id,
+        #                 "user_name": "我自己",
+        #                 "body": "我进来啦！"
+        #             }
+        #         ],
+        #         "online_users": online_users
+        #     }
+        # }))
     else:
         await websocket.send(json.dumps({
             "type": "join_room_fail",
@@ -197,6 +224,65 @@ async def handler_join_room(websocket, data):
             }
         }))
 
+# 房间追加并广播给所有在线用户
+async def handler_send_message(websocket, data):
+    # 获取参数
+    user_id = data.get("user_id")
+    room_id = data.get("room_id")
+    msg = data.get("msg").strip()
+    msg_id = data.get("msg_id")
+
+    logger.info(f"用户：{user_id} 在 {room_id} 发送 {msg}")
+
+    # 基础校验
+    if not user_id or not room_id or not msg:
+        await websocket.send(json.dumps({
+            "type": "send_message_fail",
+            "data": {
+                "msg": "信息错误，请重试"
+            }
+        }))
+        return
+    
+    # 查找房间实体
+    room = roommanager.get_room_object(room_id)
+    if not room:
+        await websocket.send(json.dumps({
+            "type": "send_message_fail",
+            "data": {
+                "msg": "房间错误，或已被删除"
+            }
+        }))
+        return
+    
+    # 往房间历史消息区追加消息
+    room.add_message(user_id, msg)
+
+    # 获取用户名
+    user_name = usermanager.get_user_name(user_id)
+
+    # 构造要广播的消息体
+    broadcast_msg = {
+        "type": "new_message",
+        "data": {
+            "user_id": user_id,
+            "user_name": user_name,
+            "body": msg,
+            "msg_id": msg_id
+        }
+    }
+
+    # 广播给所有在线用户
+    for uid in room.get_user_list():
+        ws = usermanager.get_user_ws(uid)
+        if ws:
+            logger.debug(f"发送消息给用户 {uid}")
+            await ws.send(json.dumps(broadcast_msg))
+
+async def handler_heartbeat(ws, data):
+    await ws.send(json.dumps({
+        "type": "heartbeat_ack"
+    }))
 
 async def handler(websocket):
     # 客户端成功握手后，才会进入这里
@@ -220,6 +306,10 @@ async def handler(websocket):
                     await handler_sync_room_list(websocket, msg_data)
                 case "join_room":
                     await handler_join_room(websocket, msg_data)
+                case "send_message":
+                    await handler_send_message(websocket, msg_data)
+                case "heartbeat":
+                    await handler_heartbeat(websocket, msg_data)
                 case _:
                     await logger.error("请求错误类型")
 

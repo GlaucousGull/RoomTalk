@@ -24,11 +24,14 @@ class Room:
         self.user_list = []                 # 用户列表
         self.message_list = []              # 房间历史消息列表
 
+    # 获取房间号
+    def get_room_id(self) -> str:
+        return str(self.room_id)
     # 修改房间名
     def set_room_name(self, room_name: str):
         self.room_name = room_name
 
-    def get_room_name(self):
+    def get_room_name(self) -> str:
         return self.room_name
 
     # 添加用户
@@ -54,7 +57,7 @@ class Room:
         self.room_type = room_type
 
     # 获取房间类型
-    def get_room_type(self):
+    def get_room_type(self) -> int:
         return self.room_type
 
     # 添加/修改房间加入密码

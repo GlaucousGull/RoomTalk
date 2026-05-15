@@ -30,11 +30,11 @@ class UserManager:
         return cls.__instance
 
     # 生成用户唯一id
-    def generate_id(self):
+    def generate_id(self) -> str:
         return str(uuid.uuid4())
 
     # 用户上线（如果用户不存在就创建，存在就更新状态）
-    def user_online(self, user_id, user_name, ws):
+    def user_online(self, user_id: str, user_name: str, ws):
         self.users[user_id] = {
             "user_name": user_name,
             "ws": ws,
@@ -43,25 +43,25 @@ class UserManager:
         logger.info(f"用户上线 {user_id}: {user_name}")
 
     # 用户离线（只修改状态，不删除！）
-    def user_offline(self, user_id):
+    def user_offline(self, user_id: str):
         if user_id in self.users:
             self.users[user_id]["ws"] = None  # 清空连接
             self.users[user_id]["online"] = False  # 只改在线状态
             logger.info(f"用户离线：{user_id} | {self.users[user_id]['user_name']}")
 
     # 判断用户是否在线
-    def is_online(self, user_id):
+    def is_online(self, user_id: str):
         return self.users.get(user_id, {}).get("online", False)
 
     # 根据 user_id 获取用户名
-    def get_user_name(self, user_id):
+    def get_user_name(self, user_id: str) -> str:
         user = self.users.get(user_id)
         if user:
             return user["user_name"]
         return "未知用户"
 
     # 获取用户的 websocket（用于发消息）
-    def get_user_ws(self, user_id):
+    def get_user_ws(self, user_id: str):
         user = self.users.get(user_id)
         if user and user["online"]:
             return user["ws"]
