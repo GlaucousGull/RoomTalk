@@ -1,0 +1,25 @@
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+
+# 日志
+logs/
+*.log
+debug.log
+info.log
+error.log
+warning.log
+
+# 配置/运行时文件
+config.json
+*.json
+
+# 测试文件
+frontend/
+test_html.html
+
+# 系统文件git
+.DS_Store
