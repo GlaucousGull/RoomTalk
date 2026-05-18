@@ -1,0 +1,361 @@
+/* 全局重置 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+html, body {
+    width: 100%;
+    height: 100%;
+    font-family: Arial, "Microsoft YaHei", sans-serif;
+    background: #f7f8fa;
+    overflow: hidden;
+}
+
+/* 外层容器 */
+.app-container {
+    display: flex;
+    width: 100%;
+    height: 100%;
+}
+
+/* 左侧边栏 */
+.left-sidebar {
+    width: 280px;
+    height: 100%;
+    background: #fff;
+    border-right: 1px solid #eee;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* 拖动条 */
+.drag-divider {
+    width: 4px;
+    background: #eee;
+    cursor: col-resize;
+}
+
+/* 右侧聊天区域（关键：强制高度100%） */
+.right-chat-area {
+    flex: 1;
+    height: 100vh !important;
+    display: none;
+    flex-direction: column;
+    padding: 16px;
+    gap: 0;
+}
+
+/* 显示聊天区 */
+.right-chat-area.show {
+    display: flex !important;
+}
+
+/* 聊天容器（关键：高度100% + 垂直布局） */
+#chatContainer {
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    background: #fff;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #eee;
+}
+
+/* 顶部标题 */
+.room-title {
+    padding: 14px 16px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* 聊天历史区域（关键：自动撑满） */
+#chatHistory {
+    flex: 1 !important;
+    padding: 16px !important;
+    overflow-y: auto !important;
+    background: #fafafa !important;
+    min-height: 200px !important;
+}
+
+/* 输入框 */
+.message-input-bar {
+    padding: 12px 16px;
+    border-top: 1px solid #eee;
+    display: flex;
+    gap: 8px;
+}
+.message-input-bar input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    outline: none;
+}
+.message-input-bar button {
+    padding: 10px 18px;
+    background: #409eff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+/* 所有弹窗：绝对不影响布局 */
+#callInviteModal,
+#incomingCallModal,
+#pwdModal,
+#createModal {
+    position: fixed !important;
+    z-index: 9999 !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: rgba(0,0,0,0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 弹窗内容 */
+.modal-content,
+.pwd-box,
+.call-window {
+    background: white;
+    padding: 24px;
+    border-radius: 12px;
+    min-width: 300px;
+}
+
+/* 房间列表容器 */
+.room_list {
+    background: #f9fafc;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 10px;
+}
+.room_list h3 {
+    font-size: 14px;
+    margin-bottom: 10px;
+    color: #4e5969;
+}
+/* 房间项 */
+.room_list li {
+    list-style: none;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 14px;
+    background: #fff;
+}
+/* 鼠标悬停效果 */
+.room_list li:hover {
+    background: #e8f3ff;
+    border-color: #409eff;
+}
+/* 点击反馈 */
+.room_list li:active {
+    background: #409eff;
+    color: white;
+    border-color: #337ecc;
+}
+/* 选中状态（可选） */
+.room_list li.active {
+    background: #409eff;
+    color: white;
+    border-color: #337ecc;
+}
+
+/* 左侧用户信息区 */
+.user-info-tag {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #f2f3f5;
+    padding: 10px 14px;
+    border-radius: 12px;
+    margin-bottom: 6px;
+}
+
+.avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #409eff;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0; /* 防止被挤压变形 */
+}
+
+.user-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.user-name {
+    font-size: 14px;
+    font-weight: bold;
+    color: #222;
+}
+
+.user-id {
+    font-size: 12px;
+    color: #86909c;
+}
+
+/* 聊天历史容器 */
+#chatHistory {
+    flex: 1 !important;
+    padding: 16px !important;
+    overflow-y: auto !important;
+    background: #fafafa !important;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* 消息项通用样式 */
+.msg-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    max-width: 70%;
+}
+
+/* 别人的消息：靠左 */
+.other-msg {
+    align-self: flex-start;
+}
+
+/* 自己的消息：靠右 + 反向排列 */
+.self-msg {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+}
+
+.self-msg .msg-bubble {
+    background: #409eff;
+    color: rgb(255, 255, 255);;
+}
+
+/* 消息头像 */
+.msg-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #d9d9d9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+.msg-item.self .msg-avatar {
+    background: #409eff;
+    color: white;
+}
+
+/* 消息内容区 */
+.msg-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* 消息发送者名字 */
+.msg-name {
+    font-size: 12px;
+    color: #86909c;
+    margin: 0 4px;
+}
+.msg-item.self .msg-name {
+    text-align: right;
+}
+
+/* 消息气泡 */
+.msg-bubble {
+    padding: 8px 12px;
+    border-radius: 18px;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    word-break: break-all;
+}
+.msg-item.self .msg-bubble {
+    background: #409eff;
+    color: white;
+}
+
+/* 选择通话好友弹窗*/
+#callUserModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 320px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    padding: 20px;
+    z-index: 9999;
+    display: none;
+}
+
+/* 弹窗标题 */
+#callUserModal h4 {
+    font-size: 16px;
+    margin-bottom: 16px;
+    color: #333;
+}
+
+/* 好友列表 */
+#onlineUserList {
+    list-style: none;
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+}
+
+/* 好友项（高对比度、可点击） */
+#onlineUserList li {
+    padding: 12px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-size: 14px;
+    color: #333;
+}
+#onlineUserList li:hover {
+    background: #f0f7ff;
+}
+#onlineUserList li:active {
+    background: #409eff;
+    color: #fff;
+}
+
+/* 取消按钮 */
+#closeCallModal {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 6px;
+    background: #eee;
+    cursor: pointer;
+    font-size: 14px;
+}
+#closeCallModal:hover {
+    background: #ddd;
+}

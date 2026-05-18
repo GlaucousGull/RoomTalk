@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>WebSocket 测试</title>
+    <style>
+        body { max-width: 600px; margin: 20px auto; padding: 0 20px; }
+        #msgBox { height: 300px; border: 1px solid #ccc; overflow-y: auto; padding: 10px; margin-bottom: 10px; }
+        .input-area { display: flex; gap: 10px; }
+        #inputMsg { flex: 1; padding: 8px; }
+        button { padding: 8px 16px; }
+    </style>
+</head>
+<body>
+    <h2>WebSocket 测试页面</h2>
+    <div id="msgBox"></div>
+    <div class="input-area">
+        <input type="text" id="inputMsg" placeholder="输入消息...">
+    </div>
+    <button onclick="sendMsg()">发送</button>
+
+    <script>
+        const ws = new WebSocket("ws://192.168.232.140:9000");
+        const msgBox = document.getElementById("msgBox");
+        const inputMsg = document.getElementById("inputMsg");
+
+        // 连接成功
+        ws.onopen = function() {
+            addMsg("系统", "WebSocket 连接成功！");
+        };
+
+        // 收到服务器消息
+        ws.onmessage = function(event) {
+            addMsg("服务器", event.data);
+        };
+
+        // 连接关闭
+        ws.onclose = function() {
+            addMsg("系统", "WebSocket 连接已断开");
+        };
+
+        // 发送消息
+        function sendMsg() {
+            const msg = inputMsg.value.trim();
+            if (msg && ws.readyState === WebSocket.OPEN) {
+                ws.send(msg);
+                addMsg("我", msg);
+                inputMsg.value = "";
+            }
+        }
+
+        // 追加消息到界面
+        function addMsg(from, text) {
+            const div = document.createElement("div");
+            div.textContent = `[${from}]: ${text}`;
+            msgBox.appendChild(div);
+            msgBox.scrollTop = msgBox.scrollHeight;
+        }
+    </script>
+</body>
+</html>
