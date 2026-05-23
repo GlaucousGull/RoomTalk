@@ -1,8 +1,8 @@
 import uuid
 import logging
 
-from utils import init_root_logger
-init_root_logger()
+from utils import init_project_logger
+init_project_logger()
 
 logger = logging.getLogger(__name__)
 

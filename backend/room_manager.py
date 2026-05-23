@@ -39,8 +39,8 @@ class RoomManager:
         无限尝试，直到找到可用的
         """
 
-        left = settings["room"]["room_number_min"]
-        right = settings["room"]["room_number_max"]
+        left = int(settings.get("room.room_number_min", "100000"))
+        right = int(settings.get("room.room_number_max", "999999"))
 
         # 配置检查
         if right < left:

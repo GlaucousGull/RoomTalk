@@ -35,7 +35,7 @@ class Room:
         return self.room_name
 
     # 添加用户
-    def add_user(self, user_id):
+    def add_user(self, user_id: str):
         if user_id not in self.user_list:
             self.user_list.append(user_id)
 

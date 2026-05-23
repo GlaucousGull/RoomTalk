@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>RoomTalk 聊天室主页</title>
-    <link rel="stylesheet" href="{{css_path}}">
+    <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
@@ -39,7 +39,7 @@
         <!-- 顶部标题栏 -->
         <div id="chatContainer" class="chat-container">
             <div class="room-title">
-                <h3>房间名: 测试房间</h3>
+                <h3 >房间名: </h3>
                 <!-- 视频通话控件 -->
                 <div class="room-controls">
                     <!-- 音视频通话 -->
@@ -63,26 +63,35 @@
             <ul id="onlineUserList"></ul>
             <button id="closeCallModal">取消</button>
         </div>
+    </div>
+</div>
 
-        <!-- 来电邀请弹窗 -->
-        <div id="callInviteModal">
-            <p id="inviteText"></p>
-            <button id="agreeCallBtn">同意</button>
-            <button id="refuseCallBtn">拒绝</button>
+<!-- 来电邀请弹窗 -->
+<div id="callInviteModal" style="display: none;">
+    <!-- 全屏半透明遮罩 -->
+    <div class="call-invite-mask"></div>
+    <!-- 居中弹窗 -->
+    <div class="call-invite-box">
+        <div class="call-invite-title">📹 视频通话邀请</div>
+        <div class="call-invite-user" id="inviteUserName">邀请人：加载中...</div>
+        <div class="call-invite-room" id="inviteText">房间：加载中...</div>
+        <div class="call-invite-buttons">
+            <button id="agreeCallBtn" class="btn-agree">同意</button>
+            <button id="refuseCallBtn" class="btn-refuse">拒绝</button>
         </div>
     </div>
 </div>
 
-<!-- 来电弹窗 - 绝对不会挤压原有布局 -->
-<div id="incomingCallModal" style="display:none;">
-    <div class="call-mask"></div>
-    <div class="call-window">
-        <div class="call-title">视频通话邀请</div>
-        <div class="call-user" id="callUserName">正在呼叫...</div>
-        <div class="call-buttons">
-            <button id="acceptCall" class="btn accept">接听</button>
-            <button id="rejectCall" class="btn reject">挂断</button>
-        </div>
+<!-- 视频通话容器 -->
+<div id="videoContainer">
+    <!-- 对方视屏 -->
+    <video id="remoteVideo" autoplay playsinline></video>
+    <!-- 自己视频 -->
+    <video id="localVideo" autoplay playsinline muted></video>
+
+    <!-- 挂断按钮，在通话视频层显示 -->
+    <div class="call-controls">
+        <button id="hangupBtn" class="hangup-btn">📞 挂断</button>
     </div>
 </div>
 
@@ -116,7 +125,7 @@
     </div>
 </div>
 
-<script src="{{js_path}}"></script>
+<script src="/js/app.js"></script>
 
 </body>
 </html>

@@ -2,27 +2,61 @@ import json
 import logging
 import asyncio
 import websockets
+import os
 from websockets.exceptions import ConnectionClosed
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from threading import Thread
 
-from utils import init_root_logger
+from utils import init_project_logger
 from room_manager import roommanager
 from user_manager import usermanager
+from settings import settings
 
-init_root_logger()
+init_project_logger()
 
 logger = logging.getLogger(__name__)
 
-# 静态文件服务（给客户端发 index.html）
-def run_http_server():
-    # 切换工作目录到 frontend 文件夹
-    import os
-    os.chdir("../frontend")
-    server_address = ("0.0.0.0", 9000)
-    httpd = HTTPServer(server_address, SimpleHTTPRequestHandler)
-    logger.info("HTTP 服务已启动，访问 http://localhost:9000 即可打开网页")
-    httpd.serve_forever()
+# class MyRequestHandler(SimpleHTTPRequestHandler):
+#     # 访问配置
+#     def do_GET(self):
+#         try:
+#             if self.path == "/":
+#                 # 读取配置
+#                 css_path = settings.get("frontend.css_path", "/css//style.scc")
+#                 js_path = settings.get("frontend.js_path", "/js/app.js")
+
+#                 # 读取模板
+#                 html_path = os.path.join(os.path.dirname(__file__), "../front/index.html")
+#                 with open(html_path, "r", encoding="utf-8") as fd:
+#                     content = fd.read()
+                
+#                 # 替换占位符
+#                 content = content.replace("{{css_path}}", css_path)
+#                 content = content.replace("{{js_path}}", js_path)
+
+#                 # 返回给浏览器
+#                 self.send_response(200)
+#                 self.send_header("Content-type", "text/html; charset=utf-8")
+#                 self.end_headers()
+#                 self.wfile.write(content.encode("utf-8"))
+#                 return
+#             self.send_error(404)
+#         except Exception:
+#             pass
+
+
+# # 静态文件服务（给客户端发 index.html，支持 Nginx转发）
+# def run_http_server():
+#     host = settings.get("server.host", "0.0.0.0")
+#     port = int(settings.get("server.port", 9000))
+
+#     # 使用 ThreadingHTTPServer 多线程
+#     from http.server import ThreadingHTTPServer
+
+#     server_address = (host, port)
+#     httpd = ThreadingHTTPServer(server_address, MyRequestHandler)
+#     logger.info("HTTPS 服务已启动, 启动反向代理监听9000")
+#     httpd.serve_forever()
 
 # 用户上线
 async def user_online(ws):
@@ -130,6 +164,8 @@ async def handler_join_room(websocket, data):
     # 查找对应的房间
     room = roommanager.get_room_object(room_id)
 
+    logger.info(f"用户请求加入房间 {room_id}, 房间名：{room.get_room_name()}")
+
     if not room:
         logger.debug(f"房间号：{room_id}, 房间号类型:{type(room_id).__name__}")
         # print(f"房间号：{room_id}, 房间号类型:{type(room_id).__name__}")
@@ -188,35 +224,12 @@ async def handler_join_room(websocket, data):
         await websocket.send(json.dumps({
             "type": "join_room_success",
             "data": {
+                "room_id": room.get_room_id(),
                 "room_name": room.get_room_name(),
                 "his_msg": msg_body,
                 "online_users": online_users
             }
         }))
-        # await websocket.send(json.dumps({
-        #     "type": "join_room_success",
-        #     "data": {
-        #         "room_name": room.get_room_name(),
-        #         "his_msg": [
-        #             {
-        #                 "user_id": "0001",
-        #                 "user_name": "张三",
-        #                 "body": "大家好，我是张三～"
-        #             },
-        #             {
-        #                 "user_id": "0002",
-        #                 "user_name": "李四",
-        #                 "body": "哈喽哈喽！"
-        #             },
-        #             {
-        #                 "user_id": user_id,
-        #                 "user_name": "我自己",
-        #                 "body": "我进来啦！"
-        #             }
-        #         ],
-        #         "online_users": online_users
-        #     }
-        # }))
     else:
         await websocket.send(json.dumps({
             "type": "join_room_fail",
@@ -284,6 +297,158 @@ async def handler_heartbeat(ws, data):
         "type": "heartbeat_ack"
     }))
 
+# 获取房间内的所有用户
+async def handler_get_room_users(websocket, data):
+    logger.debug("用户请求房间用户列表")
+    """ 获取当前房间内的所有用户 """
+    user_id = data.get("user_id")
+    room_id = data.get("room_id")
+
+    # 获取房间实体
+    room = roommanager.get_room_object(room_id)
+    if not room:
+        return
+    
+    # 获取用户列表
+    all_uid = room.get_user_list()
+    user_list = []
+    for uid in all_uid:
+        uname = usermanager.get_user_name(uid)
+        ustate = usermanager.is_online(uid)
+        user_list.append({
+            "user_id": uid,
+            "user_name": uname,
+            "user_online": ustate
+        })
+
+    await websocket.send(json.dumps({
+        "type": "room_users",
+        "data": {
+            "user_list": user_list
+        }
+    }))
+
+# 音视频通话邀请
+async def handler_invite_avideo_call(websocket, data):
+    """ 视频通话邀请，发给定向目标 """
+    inviter_uid = data.get("inviter_id")
+    logger.debug(f"用户 {inviter_uid} 请求视频通话")
+    target_uid = data.get("target_id")
+    room_id = data.get("room_id")
+    offer = data.get("sdp")
+    inviter_name = usermanager.get_user_name(target_uid)
+    room_name = roommanager.get_room_object(room_id).get_room_name()
+
+    target_ws = usermanager.get_user_ws(target_uid)
+    if not target_ws:
+        # 对方处于离线状态，通话邀请失败
+        msg = inviter_name + "当前不在线"
+        await websocket.send(json.dumps({
+            "type": "avideo_call_fail",
+            "data": {
+                "msg": msg
+            }
+        }))
+        return
+    
+    logger.debug(f"定向推送给用户 {target_uid} 通话邀请成功")
+    # 定向推送通话邀请
+    await target_ws.send(json.dumps({
+        "type": "avideo_call_invite",
+        "data": {
+            "room_id": room_id,
+            "room_name": room_name,
+            "inviter_id": inviter_uid,
+            "inviter_name": inviter_name,
+            "sdp": offer
+        }
+    }))
+    
+
+# 获取STUN公共服务地址
+async def handler_get_ice_url(websocket, data):
+    logger.debug("用户获取STUN服务ICE")
+    iceServers = settings.get("iceServers")
+    await websocket.send(json.dumps({
+        "type": "ice_config",
+        "data": {
+            "ice_servers": iceServers
+        }
+    }))
+
+# 目标用户拒绝通话
+async def handler_reject_avideo_call(websocket, data):
+    user_id = data.get("target_id")
+    user_name = usermanager.get_user_name(user_id)
+    await websocket.send(json.dumps({
+        "type": "user_reject_avideo_call",
+        "data": {
+            "user_id": user_id,
+            "user_name": user_name
+        }
+    }))
+
+# 目标用户同意进行音视频通话
+async def handler_agree_avideo_call(websocket, data):
+    # 信令传递
+    target_id = data.get("target_id")
+    answer = data.get("sdp")
+
+    # 获取目标用户名
+    target_name = usermanager.get_user_name(target_id)
+
+    # 获取目标用户的ws
+    target_ws = usermanager.get_user_ws(target_id)
+
+    if not target_ws:
+        msg = "通话失败，用户" + target_name + "连接断开"
+        await websocket.send(json.dumps({
+            "type": "avideo_call_fail",
+            "data": {
+                "msg": msg
+            }
+        }))
+        return
+
+    # 传递会给发送者
+    logger.debug("用户同意视频通话")
+
+    await target_ws.send(json.dumps({
+        "type": "answer",
+        "data": {
+            "user_id": target_id,
+            "user_name": target_name,
+            "sdp": answer
+        }
+    }))
+
+# 交换双方的 ice 候选者
+async def handler_ice_candidate_swap(websocket, data):
+    # 给目标发送 ice_candidate
+    target_id = data.get("target_id")
+    ice_candidate = data.get("candidate")
+
+    # 获取目标 ws
+    target_ws = usermanager.get_user_ws(target_id)
+
+    if not target_id:
+        msg = "通话失败，用户" + target_id + "连接断开"
+        await websocket.send(json.dumps({
+            "type": "avideo_call_fail",
+            "data": {
+                "msg": msg
+            }
+        }))
+        return
+    
+    await target_ws.send(json.dumps({
+        "type": "remote_ice_candidate",
+        "data": {
+            "candidate": ice_candidate
+        }
+    }))
+    
+
 async def handler(websocket):
     # 客户端成功握手后，才会进入这里
     client_addr = websocket.remote_address
@@ -299,6 +464,8 @@ async def handler(websocket):
             msg_type = data.get("type")
             msg_data = data.get("data")
 
+            logger.info(f"用户发送指令 {msg_type}")
+
             match msg_type:
                 case "create_room":
                     await handler_create_room(websocket, msg_data)
@@ -310,8 +477,20 @@ async def handler(websocket):
                     await handler_send_message(websocket, msg_data)
                 case "heartbeat":
                     await handler_heartbeat(websocket, msg_data)
+                case "get_room_online_users":
+                    await handler_get_room_users(websocket, msg_data)
+                case "offer":
+                    await handler_invite_avideo_call(websocket, msg_data)
+                case "get_ice_url":
+                    await handler_get_ice_url(websocket, msg_data)
+                case "reject_video_call":
+                    await handler_reject_avideo_call(websocket, msg_data)
+                case "answer":
+                    await handler_agree_avideo_call(websocket, msg_data)
+                case "local_ice_candidate":
+                    await handler_ice_candidate_swap(websocket, msg_data)
                 case _:
-                    await logger.error("请求错误类型")
+                    logger.error("请求错误类型")
 
 
     except ConnectionClosed:
@@ -319,10 +498,10 @@ async def handler(websocket):
 
 async def main():
     # 在后台线程启动 HTTP 服务
-    http_thread = Thread(target=run_http_server, daemon=True)
-    http_thread.start()
-    # 监听 192.168.232.140 网卡的 9000 端口
-    async with websockets.serve(handler, "0.0.0.0", 10000):
+    # http_thread = Thread(target=run_http_server, daemon=True)
+    # http_thread.start()
+    # 获取配置，websocket ip和port
+    async with websockets.serve(handler, settings.get("server.host", "0.0.0.0"), int(settings.get("server.ws_port", 10000))):
         logger.info("WebSocket 服务器启动成功，监听端口 10000")
         await asyncio.Future()  # 永久运行，不会退出
 

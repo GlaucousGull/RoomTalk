@@ -38,27 +38,27 @@ html, body {
     cursor: col-resize;
 }
 
-/* 右侧聊天区域（关键：强制高度100%） */
+/* 右侧聊天区域 */
 .right-chat-area {
     flex: 1;
-    height: 100vh !important;
+    height: 100vh;
     display: none;
     flex-direction: column;
     padding: 16px;
     gap: 0;
 }
 
-/* 显示聊天区 */
+/* 显示聊天区*/
 .right-chat-area.show {
-    display: flex !important;
+    display: flex;
 }
 
-/* 聊天容器（关键：高度100% + 垂直布局） */
+/* 聊天容器 */
 #chatContainer {
-    width: 100% !important;
-    height: 100% !important;
-    display: flex !important;
-    flex-direction: column !important;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
     background: #fff;
     border-radius: 10px;
     overflow: hidden;
@@ -74,13 +74,13 @@ html, body {
     align-items: center;
 }
 
-/* 聊天历史区域（关键：自动撑满） */
+/* 聊天历史区域*/
 #chatHistory {
-    flex: 1 !important;
-    padding: 16px !important;
-    overflow-y: auto !important;
-    background: #fafafa !important;
-    min-height: 200px !important;
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    background: #fafafa;
+    min-height: 200px;
 }
 
 /* 输入框 */
@@ -107,30 +107,33 @@ html, body {
 }
 
 /* 所有弹窗：绝对不影响布局 */
-#callInviteModal,
-#incomingCallModal,
 #pwdModal,
 #createModal {
-    position: fixed !important;
-    z-index: 9999 !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
+    position: fixed;
+    z-index: 9999;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
     background: rgba(0,0,0,0.5);
     display: none;
     align-items: center;
     justify-content: center;
+    /* 确保创建房间弹窗不被其他元素遮挡 */
+    pointer-events: auto;
 }
 
 /* 弹窗内容 */
 .modal-content,
-.pwd-box,
-.call-window {
+.pwd-box
+{
     background: white;
     padding: 24px;
     border-radius: 12px;
     min-width: 300px;
+    /* 确保弹窗内容可交互 */
+    position: relative;
+    z-index: 10000;
 }
 
 /* 房间列表容器 */
@@ -219,10 +222,10 @@ html, body {
 
 /* 聊天历史容器 */
 #chatHistory {
-    flex: 1 !important;
-    padding: 16px !important;
-    overflow-y: auto !important;
-    background: #fafafa !important;
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    background: #fafafa;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -312,6 +315,8 @@ html, body {
     padding: 20px;
     z-index: 9999;
     display: none;
+    /* 确保通话弹窗与创建房间弹窗层级不冲突 */
+    pointer-events: auto;
 }
 
 /* 弹窗标题 */
@@ -358,4 +363,146 @@ html, body {
 }
 #closeCallModal:hover {
     background: #ddd;
+}
+
+/* 远端播放大窗口 */
+#remoteVideo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+/* 本地播放小窗口 */
+#localVideo {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 180px;
+    height: 320px;
+    object-fit: cover;
+    border: 20px solid #fff;
+}
+
+/* 视频来电弹窗 - 最终完美版 */
+#callInviteModal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+}
+
+.call-invite-mask {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.4);
+    backdrop-filter: blur(2px);
+}
+
+.call-invite-box {
+    position: relative;
+    background: #fff;
+    padding: 30px;
+    border-radius: 16px;
+    min-width: 320px;
+    text-align: center;
+    box-shadow: 0 5px 30px rgba(0,0,0,0.3);
+    z-index: 10;
+}
+
+.call-invite-title {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+.call-invite-user {
+    font-size: 16px;
+    color: #409eff;
+    margin-bottom: 5px;
+}
+.call-invite-room {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 20px;
+}
+.call-invite-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+.btn-agree {
+    background: #22c55e;
+    color: white;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.btn-refuse {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+/* 视屏渲染画面控制 */
+#videoContainer {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
+    z-index: 9998; /* 低于弹窗层级，避免遮挡创建房间弹窗 */
+}
+
+#remoteVideo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#localVideo {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 200px;
+    height: 150px;
+    border-radius: 8px;
+    border: 2px solid #fff;
+    object-fit: cover;
+    display: block;
+}
+
+/* 通话控制栏 */
+.call-controls {
+    position: absolute;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10000;
+}
+
+/* 挂断按钮 */
+.hangup-btn {
+    background: #ff3b30;
+    color: white;
+    font-size: 16px;
+    border: none;
+    border-radius: 50px;
+    padding: 14px 36px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(255,59,48,0.3);
+}
+.hangup-btn:hover {
+    background: #e03027;
 }

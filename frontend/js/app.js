@@ -8,9 +8,11 @@ let heartbeatTimer = null;      // 心跳定时器
 let reconnectTimeOut = null;    // 重连定时器
 const HEARTBEAT_INTERVAL = 30000;  // 30秒心跳
 
+let callInstace = null; // 音视频通话实例
+
 // 连接函数
 function connectWebSocket() {
-    const wsUrl = "ws://" + window.location.hostname + ":10000";
+    const wsUrl = "wss://192.168.232.140:9001/ws";
     ws = new WebSocket(wsUrl);
 
     // 连接建立
@@ -46,6 +48,9 @@ function connectWebSocket() {
                 // 更新用户信息
                 document.getElementById("displayUserName").innerText = user_data.user_name;
                 document.getElementById("displayUserId").innerText = `UID: ${user_data.user_id.slice(-6)}`;
+
+                // 初始化音视频通话
+                VideoCall.init(ws, user_data);
                 break;
 
             case "create_room_success":
@@ -68,9 +73,26 @@ function connectWebSocket() {
                 break;
 
             case "join_room_success":
+                console.log("roomid:$s room_name:%s", data.data.room_id, data.data.room_name);
+                current_joining_room = {
+                    room_id: data.data.room_id,
+                    room_name: data.data.room_name
+                };
                 document.querySelector(".right-chat-area").classList.add("show")
                 // 加载历史消息
                 load_history_messages(data.data.his_msg);
+
+                // 创建视频通话实例
+                if (current_joining_room && current_joining_room.room_id) {
+                    callInstace = new VideoCall({
+                        userId: user_data.user_id,
+                        roomId: current_joining_room.room_id
+                    });
+                }else {
+                    console.error("未加入房间，无法初始化视频通话！");
+                    alert("请先加入一个房间！");
+                }
+
                 break;
 
             case "join_room_fail":
@@ -86,8 +108,38 @@ function connectWebSocket() {
                 break;
             
             case "room_users":
-                roomOnlineUsersRendering(data.data);
+                // alert("获取到房间内的用户列表");
+                callInstace.renderOnlineUserList(data.data.user_list);
                 break;
+
+            case "ice_config":
+                // alert("获取到服务器配置的公共ICE地址");
+                VideoCall.setIceUrl(data.data.ice_servers);
+                break;
+
+            case "avideo_call_invite":
+                alert("收到其他用户的音视频通话邀请");
+                callInstace.setPeerUserData(data.data.inviter_id, data.data.inviter_name)
+                callInstace.setAvdioSdp(data.data.sdp);
+                callInstace.setPeerRoomId(data.data.room_id);
+                VideoCall.showIncomingCall(data.data.user_name, data.data.room_name);
+                break;
+
+            case "avideo_call_fail":
+                alert(data.data.msg);
+                break;
+
+            case "answer":
+                callInstace.processRemoteAnswer(data.data.sdp);
+                console.log("接收到接收返回的 answer");
+                break;
+
+            case "remote_ice_candidate":
+                callInstace.addRemoteIceCandidate(data.data.candidate);
+                break;
+            
+            default:
+                console.log("为未匹配到 %s 事件名", data.type);
         }
     };
 
@@ -205,7 +257,7 @@ function handleRoomClick(room) {
 function closePwdModal() {
     document.getElementById("pwdModal").style.display = "none";
     document.getElementById("roomPwdInput").value = "";
-    current_joining_room = null;
+    // current_joining_room = null;
 }
 
 // 私域房间确认密码
@@ -432,139 +484,392 @@ window.onload = function() {
     };
 };
 
-// 视频通话响应逻辑所需信息
-let currentRoomId = "";
-let targetCallUserId = "";
-let targetCallUserNmae = "";
+class VideoCall {
+    // 静态成员（类级别）
+    static iceConfig = null;
+    static iceLoaded = false;
+    static ws = null;           // 绑定 websocket
+    static userData = null;     // 当前用户信息
+    
 
-document.getElementById("openCallSelectBtn").addEventListener("click", async () => {
-    console.log("视频通话按钮被点击");
+    // 私有实例成员
+    #localStream;       // 本地音视频流
+    #userId;            // 自己ID
+    #targetId;          // 对方ID
+    #targetName;        // 对方名字
+    #roomId;            // 当前房间ID
+    #peerRoomId;        // 对方房间ID
+    #pc;                // RTCPeerConnection
+    #sdp = null;        // 音视频通话 sdp: offer
+    #video = true;
+    #audio = true;
 
-    // 1. 先打印所有变量，确认它们的值
-    console.log("current_joining_room:", current_joining_room);
-    currentRoomId = current_joining_room?.room_id;
-    console.log("currentRoomId:", currentRoomId);
-    console.log("user_data:", user_data);
-    console.log("user_id:", user_data?.user_id);
+    // 构造函数
+    constructor({ userId, targetId = null, targetName = '', roomId, video = true, audio = true }) {
+        this.#userId = userId;
+        this.#targetId = targetId;
+        this.#targetName = targetName;
+        this.#roomId = roomId;
+        this.#video = video;
+        this.#audio = audio;
+        this.#localStream = null;
 
-    // 2. 前置校验
-    if (!currentRoomId || currentRoomId === "") {
-        alert("未加入房间，视频通话请求失败");
-        return;
+        // 绑定 DOM 事件（只绑定一次）
+        this.#bindEvents();
     }
-    if (!user_data || !user_data.user_id) {
-        alert("用户未登录，无法发起请求");
-        return;
-    }
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-        alert("网络连接异常，请稍后重试");
-        console.log("ws状态:", ws?.readyState);
-        return;
+
+    // 静态初始化
+    static init(wsInstance, userData) {
+        VideoCall.ws = wsInstance;
+        VideoCall.userData = userData;
+
+        // 页面加载就获取 ICE 配置
+        VideoCall.getIceUrl();
     }
 
-    console.log("所有校验通过，准备发送消息");
+    // 静态：请求 ICE 配置
+    static getIceUrl() {
+        console.log("用户请求ICE配置");
+        if (!VideoCall.ws) return;
+        VideoCall.ws.send(JSON.stringify({ type: "get_ice_url", data: {} }));
+    }
 
-    // 3. 构建消息，先打印再序列化，确保内容正常
-    const msg = {
-        type: "get_room_online_users",
-        data: {
-            user_id: user_data.user_id,
-            room_id: currentRoomId
+    // 静态：设置 ICE 配置
+    static setIceUrl(data) {
+        VideoCall.iceConfig = data.map(item => ({ urls: item.url }));
+        VideoCall.iceLoaded = true;
+    }
+
+    // 静态：显示来电弹窗
+    static showIncomingCall(userName, room_name) {
+        document.getElementById("inviteUserName").innerText = "邀请人：" + userName;
+        document.getElementById("inviteText").textContent = "房间：" + room_name;
+        document.getElementById("callInviteModal").style.display = "block";
+    }
+
+    // 静态：关闭来电弹窗
+    static hideIncomingCall() {
+        document.getElementById("callInviteModal").style.display = "none";
+    }
+
+    // 私有：绑定所有 DOM 事件
+    #bindEvents() {
+        // 打开视频通话选择
+        document.getElementById("openCallSelectBtn").onclick = () => {
+            this.#onOpenCallListClick();
+
+        };
+
+        // 关闭选择弹窗
+        document.getElementById("closeCallModal").onclick = () => {
+            document.getElementById("callUserModal").style.display = "none";
+        };
+
+        // 同意通话
+        document.getElementById("agreeCallBtn").onclick = () => {
+            console.log("点击同意通话");
+            VideoCall.hideIncomingCall();
+            this.#handleAcceptCall();
+        };
+
+        // 拒绝通话
+        document.getElementById("refuseCallBtn").onclick = () => {
+            console.log("点击拒绝通话");
+            VideoCall.hideIncomingCall();
+            this.#handleRejectCall();
+        };
+
+        // 挂断视频通话
+        document.getElementById("hangupBtn").onclick = function() {
+            if (callInstace) {
+                callInstace.hangup();   // 断开连接
+            }
+            VideoCall.hideIncomingCall();     // 下沉通话界面
+            console.log("已挂断电话");
         }
-    };
-    console.log("准备发送的消息对象:", msg);
-
-    // 4. 加 try-catch 捕获序列化和发送的异常
-    try {
-        const str = JSON.stringify(msg);
-        console.log("序列化后的消息:", str);
-        ws.send(str);
-        console.log("消息发送成功");
-        document.getElementById("callUserModal").style.display = "block";
-    } catch (err) {
-        console.error("发送消息时出错:", err);
-        alert("发送失败: " + err.message);
     }
-});
 
-// 关闭通话列表弹窗
-document.getElementById("closeCallModal").addEventListener("click", () => {
-    document.getElementById("callUserModal").style.display = "none";
-});
+    // 挂断电话
+    hangup() {
+        try {
+            // 关闭p2p连接
+            if (this.#pc) {
+                this.#pc.close();
+                this.#pc = null;
+            }
 
-// 接收后端发来的用户列表并在通话界面渲染
-function roomOnlineUsersRendering(data) {
-    const ulDom = document.getElementById("onlineUserList");
-    ulDom.innerHTML = "";
-    user_list = data.user_list;
-    user_list.forEach(item => {
-        online_state = item.user_online;
-        if (online_state == false
-            || online_state == "false"
-            || online_state == "0"
-            || item.user_id == user_data.user_id) {
+            // 关闭摄像头和摄像头和麦克风
+            if (this.#localStream) {
+                this.#localStream.getTracks().forEach(track => {
+                    track.stop();   // 关闭每个轨道：画面采集、音频采集
+                });
+                this.#localStream = null;
+            }
+        } catch (e) {
+            console.log("挂断出错", e);
+        }
+
+        // 隐藏视频界面
+        const videoContainer = document.getElementById("videoContainer");
+        if (videoContainer) {
+            videoContainer.style.display = "none";
+        }
+
+        // 清空 video 标签画面
+        const localVideo = document.getElementById("localVideo");
+        const remoteVideo = document.getElementById("remoteVideo");
+        if (localVideo) localVideo.srcObject = null;
+        if (remoteVideo) remoteVideo.srcObject = null;
+
+        console.log("已挂断：连接关闭 + 摄像头/麦克风已停止");
+    }
+
+    // 设置对端用户信息
+    setPeerUserData(user_id, user_name) {
+        this.#targetId = user_id;
+        this.#targetName = user_name;
+    }
+
+    // 设置对端房间信息
+    setPeerRoomId(peerRoomId) {
+        this.#peerRoomId = peerRoomId;
+    }
+
+    // 设置sdp
+    setAvdioSdp(sdp) {
+        this.#sdp = sdp;
+    }
+
+    // 打开通话列表
+    #onOpenCallListClick() {
+        if (!this.#roomId) return alert("未加入房间");
+        if (!VideoCall.userData) return alert("未登录");
+        VideoCall.ws.send(JSON.stringify({
+            type: "get_room_online_users",
+            data: {
+                user_id: VideoCall.userData.user_id,
+                room_id: this.#roomId
+            }
+        }));
+        document.getElementById("callUserModal").style.display = "block";
+    }
+
+    // 渲染在线用户列表
+    renderOnlineUserList(userList) {
+        const ul = document.getElementById("onlineUserList");
+        ul.innerHTML = "";
+        userList.forEach(item => {
+            if (!item.user_online || item.user_id === VideoCall.userData.user_id) return;
+            const li = document.createElement("li");
+            li.innerText = item.user_name;
+            li.style.padding = "8px 0";
+            li.style.cursor = "pointer";
+            li.onclick = async () => {
+                // 获取本地媒体流
+                await this.#getLocalStream();
+
+                this.#targetId = item.user_id;
+                this.#targetName = item.user_name;
+                document.getElementById("callUserModal").style.display = "none";
+
+                // 先创建连接 → 再发offer
+                await this.createPeerConnection();
+                await this.sendOffer();
+            };
+            ul.appendChild(li);
+        });
+    }
+
+    // 创建 P2P 连接
+    async createPeerConnection() {
+        if (!VideoCall.iceLoaded) {
+            console.error("ICE 未加载");
             return;
         }
-        let li = document.createElement("li");
-        li.style.padding = "8px 0";
-        li.style.cursor = "pointer";
-        li.style.borderBottom = "1px solid #eee";
-        li.innerText = item.user_name;
-        // 点击选中发起邀请事件绑定
-        li.addEventListener("click", () => {
-            targetCallUserId = item.user_id;
-            targetCallUserNmae = item.user_name;
-            // 关闭选择弹窗
-            document.getElementById("callUserModal").style.display = "none";
-            // 向后端发起通话请求
-            ws.send(JSON.stringify({
-                type: "invite_video_call",
-                data: {
-                    invater_id: user_data.user_id,
-                    target_id: targetCallUserId,
-                    room_id: current_joining_room.room_id
+
+        document.getElementById("videoContainer").style.display = "block";
+
+        // 创建连接
+        this.#pc = new RTCPeerConnection({ iceServers: VideoCall.iceConfig });
+        console.log("创建 RTCPeerConnection 成功");
+
+        // 添加轨道
+        if (!this.#localStream) {
+            console.error(" 本地流不存在，无法添加轨道");
+        }else {
+            this.#addLocalTracks();
+            console.log("添加本地轨道完成")
+        }
+
+        // ontrack 监听远程流
+        this.#pc.ontrack = (e) => {
+            console.log("收到远程流", e.streams[0]);
+            
+            const remoteVideo = document.getElementById("remoteVideo");
+            if (!remoteVideo) {
+                console.error(" 找不到 remoteVideo 元素");
+                return;
+            }
+
+            // 只赋值一次，避免重复覆盖导致播放中断
+            if (!remoteVideo.srcObject) {
+                remoteVideo.srcObject = e.streams[0];
+                console.log("远程流已绑定到 video");
+            }
+
+            // 安全播放
+            remoteVideo.play().catch(err => {
+                console.warn("视频自动播放被浏览器限制（不影响功能）", err);
+            });
+        };
+
+        // 发送 ICE 候选者
+        this.#pc.onicecandidate = (e) => {
+            if (e.candidate) {
+                console.log("发送本地ICE:", e.candidate);
+                VideoCall.ws.send(JSON.stringify({
+                    type: "local_ice_candidate",
+                    data: {
+                        target_id: this.#targetId,
+                        candidate: e.candidate
+                    }
+                }));
+            }
+        };
+
+        // 状态监听（排查用）
+        this.#pc.oniceconnectionstatechange = () => {
+            console.log("ICE 状态：", this.#pc.iceConnectionState);
+        };
+
+        this.#pc.onconnectionstatechange = () => {
+            console.log("连接状态：", this.#pc.connectionState);
+        };
+    }
+
+    // 接收对方发来的 ice_candidate
+    async addRemoteIceCandidate(candidate) {
+        try {
+            await this.#pc.addIceCandidate(new RTCIceCandidate(candidate));
+            console.log("添加远程 ICE 成功", candidate);
+        } catch (err) {
+            console.error("添加 ICE 失败：", err, candidate);
+        }
+    }
+
+    // 获取本地流
+    async #getLocalStream() {
+        // 已经获取过，不在获取
+        if (this.#localStream) return;
+        if (!navigator.mediaDevices) {
+            alert("请使用 localhost/htpps 访问，否则无法打开摄像头");
+            throw new Error("不支持媒体设备");
+        }
+        try {
+            this.#localStream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: {
+                    echoCancellation: true,     // 开启回声消除
+                    noiseSuppression: true,     // 开启噪音音质
+                    autoGainControl: true       // 开启自动增益控制，稳定音量
                 }
+            });
+    
+            const localVideo = document.getElementById("localVideo");
+            if (localVideo) localVideo.srcObject = this.#localStream;
+
+        } catch (err) {
+            alert("请允许摄像头/麦克风权限");
+            throw err;
+        }
+    }
+
+    // 添加本地轨道
+    #addLocalTracks() {
+        if (!this.#localStream || !this.#pc) return;
+        this.#localStream.getTracks().forEach(track => {
+            this.#pc.addTrack(track, this.#localStream);
+            console.log("添加本地轨道：", track.kind);
+        });
+    }
+
+    // 核心流程：发起方 → 发送 Offer
+    async sendOffer() {
+        const offer = await this.#pc.createOffer({
+            offerToReceiveVideo: true,
+            offerToReceiveAudio: true
+        });
+        await this.#pc.setLocalDescription(offer);
+        VideoCall.ws.send(JSON.stringify({
+            type: "offer",
+            data: {
+                inviter_id: this.#userId,
+                target_id: this.#targetId,
+                room_id: this.#roomId,
+                sdp: offer
+            }
+        }));
+        console.log("发起方发送 offer 成功");
+    }
+
+    // 接收方处理流程：
+    async #handleAcceptCall() {
+        try {
+            console.log("开始处理接听流程");
+
+            // 获取本地流（必须在点击事件里第一时间获取，避免权限问题）
+            await this.#getLocalStream();
+            console.log("本地流获取成功");
+
+            // 创建连接
+            await this.createPeerConnection();
+            console.log("PeerConnection 创建成功");
+
+            // 设置远程 Offer SDP（必须包装成 RTCSessionDescription）
+            if (!this.#sdp || !this.#sdp.type || !this.#sdp.sdp) {
+                throw new Error("收到的 Offer SDP 格式错误");
+            }
+            const remoteDesc = new RTCSessionDescription(this.#sdp);
+            await this.#pc.setRemoteDescription(remoteDesc);
+            console.log("setRemoteDescription 成功");
+
+            // 创建并发送 Answer
+            const answer = await this.#pc.createAnswer();
+            await this.#pc.setLocalDescription(answer);
+            console.log("setLocalDescription 成功");
+
+            // 发送 Answer 给对方
+            VideoCall.ws.send(JSON.stringify({
+                type: "answer",
+                data: { target_id: this.#targetId, sdp: answer }
             }));
-        })
+            console.log("已发送 Answer");
 
-        ulDom.appendChild(li);
-    })
+            // 显示视频容器
+            document.getElementById("videoContainer").style.display = "block";
+
+        } catch (e) {
+            console.error("接听失败，完整错误信息：", e);
+            alert("接听失败：" + e.message);
+        }
+    }
+
+    // 核心流程：发起方 → 收到 Answer
+    async processRemoteAnswer(sdp) {
+        if (!this.#pc) {
+            console.log("processRemoteAnswer:pc 不存在，创建中");
+            await this.createPeerConnection();
+        }
+        await this.#pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        console.log("发起方设置远程");
+
+    }
+
+    // 拒绝
+    #handleRejectCall() {
+        VideoCall.ws.send(JSON.stringify({
+            type: "reject_video_call",
+            data: { target_id: this.#targetId }
+        }));
+    }
 }
-
-// 显示来电
-function showIncomingCall(userName) {
-    document.getElementById("callUserNmae").innerText = userName;
-    document.getElementById("incomigCallModal").style.display = "block";
-}
-
-// 隐藏来电
-function hideIncomingCall() {
-    document.getElementById("incomigCallModal").style.display = "none";
-}
-
-// 同意
-document.getElementById("acceptCall").onclick = function() {
-    hideIncomingCall();
-}
-
-// 拒绝
-document.getElementById("rejectCall").onclick = function() {
-    hideIncomingCall();
-}
-
-// webRTC实现视频通话
-let localStream;
-let peerConnection;
-
-// 打开摄像头
-async function startCamera() {
-    localStream = await nevigator.mediaDevices.getUserMedia({
-        video: true,
-        Audio: true
-    });
-
-    // 绑定视频通话按钮
-    // document.
-}
-
-// 
