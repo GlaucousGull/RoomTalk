@@ -58,3 +58,37 @@ if __name__ == "__main__":
     logger.info("info")
     logger.debug("debug")
 
+# 双射工具类
+class BiDict:
+    # 双向字典
+    def __init__(self):
+        self.forward = {}       # key -> value
+        self.backword = {}      # value -> key
+    
+    def set(self, key, value):
+        if key in self.forward:
+            del self.backword[self.forward[key]]    # del 123 -> 456
+        if value in self.backword:
+            del self.forward[self.backword[value]]  # del 456 -> 123
+        
+        self.forward[key] = value   # 123 -> 789
+        self.backword[value] = key  # 789 -> 123
+
+    def get_by_key(self, key):
+        return self.forward.get(key)
+    
+    def get_by_value(self, value):
+        return self.backword.get(value)
+    
+    def delete_by_key(self, key):
+        if key in self.forward:
+            value = self.forward[key]
+            del self.forward[key]
+            del self.backword[value]
+        
+    def delete_by_value(self, value):
+        if value in self.backword:
+            key = self.backword[value]
+            del self.forward[key]
+            del self.backword[value]
+

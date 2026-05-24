@@ -73,11 +73,15 @@ function connectWebSocket() {
                 break;
 
             case "join_room_success":
-                console.log("roomid:$s room_name:%s", data.data.room_id, data.data.room_name);
+                console.log("roomid: ", data.data.room_id, "roomNmae", data.data.room_name);
                 current_joining_room = {
                     room_id: data.data.room_id,
                     room_name: data.data.room_name
                 };
+
+                // 渲染顶部房间名等状态
+                enterRoom(data.data.room_name, data.data.online_users);
+
                 document.querySelector(".right-chat-area").classList.add("show")
                 // 加载历史消息
                 load_history_messages(data.data.his_msg);
@@ -201,6 +205,12 @@ function scheduleReconnect() {
     }, 3000);
 }
 
+// 房间名加载和房间人数加载
+function enterRoom(roomName, roomCount) {
+    document.getElementById("roomName").innerText = roomName;
+    document.getElementById("userCount").innerText = `(在线${roomCount}人`;
+}
+
 // 新消息广播处理
 function new_message_processing(data) {
     msg_id = data.msg_id;
@@ -294,7 +304,7 @@ document.getElementById("roomTypeSelBtn").addEventListener("change", function() 
 function createRoom() {
     if (!user_data) return alert("请等待用户初始化");
     // 区分用户创建的房间类型
-    room_name_value = document.getElementById("roomName").value.trim(),
+    room_name_value = document.getElementById("roomNameInput").value.trim(),
     room_type_value = document.getElementById("roomTypeSelBtn").value
     switch(room_type_value) {
         case "0": 
@@ -325,7 +335,7 @@ function createRoom() {
     }
 
     closeModal();
-    document.getElementById("roomName").value = "";
+    document.getElementById("roomNameInput").value = "";
     document.getElementById("roomPasswordInput").value = "";
     document.getElementById("roomTypeSelBtn").value = "0";
 }

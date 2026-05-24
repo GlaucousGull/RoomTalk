@@ -3,9 +3,15 @@ import logging
 import asyncio
 import websockets
 import os
+import threading
 from websockets.exceptions import ConnectionClosed
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+# from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+from http.server import SimpleHTTPRequestHandler
 from threading import Thread
+
+# 换成这个（Python 3.10 兼容）
+from http.server import HTTPServer
+from socketserver import ForkingMixIn
 
 from utils import init_project_logger
 from room_manager import roommanager
@@ -16,47 +22,92 @@ init_project_logger()
 
 logger = logging.getLogger(__name__)
 
-# class MyRequestHandler(SimpleHTTPRequestHandler):
-#     # 访问配置
-#     def do_GET(self):
-#         try:
-#             if self.path == "/":
-#                 # 读取配置
-#                 css_path = settings.get("frontend.css_path", "/css//style.scc")
-#                 js_path = settings.get("frontend.js_path", "/js/app.js")
+# 定义多进程 HTTP 服务器
+class ForkingHTTPServer(ForkingMixIn, HTTPServer):
+    daemon_threads = True
 
-#                 # 读取模板
-#                 html_path = os.path.join(os.path.dirname(__file__), "../front/index.html")
-#                 with open(html_path, "r", encoding="utf-8") as fd:
-#                     content = fd.read()
+# 获取项目根目录
+def get_project_root():
+    # 当前文件所在目录 (backend目录)
+    current_file_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.abspath(os.path.join(current_file_dir, ".."))
+
+# 获取配置的前端根目录文件
+def get_frontend_dir():
+    root_dir = settings.get("frontend.root_dir", "../frontend")
+    if not os.path.isabs(root_dir):
+        root_dir = os.path.join(get_project_root(), root_dir)
+    return os.path.abspath(root_dir)
+
+class MyRequestHandler(SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        # 静态文件根目录
+        frontend_dir = get_frontend_dir()
+        super().__init__(*args, directory=frontend_dir, **kwargs)
+
+    # 全局跨域（解决 WebSocket 跨域）
+    def end_headers(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        super().end_headers()
+
+    # GET 请求处理
+    def do_GET(self):
+        try:
+            # 首页动态渲染
+            if self.path == "/" or self.path == "/index.html":
+                # 读取配置
+                frontend_dir = get_frontend_dir()
+                html_path = os.path.join(frontend_dir, "index.html")
+
+
+                css_path = settings.get("frontend.css_path", "/css//style.scc")
+                js_path = settings.get("frontend.js_path", "/js/app.js")
+
+                # 读取模板
+                with open(html_path, "r", encoding="utf-8") as fd:
+                    content = fd.read()
                 
-#                 # 替换占位符
-#                 content = content.replace("{{css_path}}", css_path)
-#                 content = content.replace("{{js_path}}", js_path)
+                # 替换占位符
+                content = content.replace("{{css_path}}", css_path)
+                content = content.replace("{{js_path}}", js_path)
 
-#                 # 返回给浏览器
-#                 self.send_response(200)
-#                 self.send_header("Content-type", "text/html; charset=utf-8")
-#                 self.end_headers()
-#                 self.wfile.write(content.encode("utf-8"))
-#                 return
-#             self.send_error(404)
-#         except Exception:
-#             pass
+                # 返回给浏览器
+                self.send_response(200)
+                self.send_header("Content-type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(content.encode("utf-8"))
+                return 
+            return super().do_GET()
+        except Exception as e:
+            logger.error(f"请求异常 {e}", exc_info=True)
+            self.send_error(500)
 
+class HttpServer:
+    @staticmethod
+    def run():
+        host = settings.get("server.host", "0.0.0.0")
+        port = int(settings.get("server.port", 9000))
+        
+        logger.info(f"http id: {host} 监听端口 {port}")
 
-# # 静态文件服务（给客户端发 index.html，支持 Nginx转发）
-# def run_http_server():
-#     host = settings.get("server.host", "0.0.0.0")
-#     port = int(settings.get("server.port", 9000))
+        try:
+            server = ForkingHTTPServer((host, port), MyRequestHandler)
+            logger.info(f"HTTP 静态服务启动成功 => http://{host}:{port}")
+            logger.info(f"前端目录 => {get_frontend_dir()}")
+            server.serve_forever()
+        except Exception as e:
+            logger.error(f"HTTP 服务启动失败: {e}")
 
-#     # 使用 ThreadingHTTPServer 多线程
-#     from http.server import ThreadingHTTPServer
+# 静态文件服务（给客户端发 index.html，支持 Nginx转发）
+def run_http_server():
+    HttpServer.run()
 
-#     server_address = (host, port)
-#     httpd = ThreadingHTTPServer(server_address, MyRequestHandler)
-#     logger.info("HTTPS 服务已启动, 启动反向代理监听9000")
-#     httpd.serve_forever()
+# # 用户注册
+# async def handler_user_login(websocket, data):
+#     # 统一获取数据
+#     user_name = data.get()
 
 # 用户上线
 async def user_online(ws):
@@ -467,10 +518,12 @@ async def handler(websocket):
             logger.info(f"用户发送指令 {msg_type}")
 
             match msg_type:
-                case "create_room":
-                    await handler_create_room(websocket, msg_data)
+                # case "user_login":
+                #     await handler_user_login(websocket, msg_data)
                 case "synchro_room_list":
                     await handler_sync_room_list(websocket, msg_data)
+                case "create_room":
+                    await handler_create_room(websocket, msg_data)
                 case "join_room":
                     await handler_join_room(websocket, msg_data)
                 case "send_message":
@@ -498,8 +551,7 @@ async def handler(websocket):
 
 async def main():
     # 在后台线程启动 HTTP 服务
-    # http_thread = Thread(target=run_http_server, daemon=True)
-    # http_thread.start()
+    threading.Thread(target=run_http_server, daemon=True).start()
     # 获取配置，websocket ip和port
     async with websockets.serve(handler, settings.get("server.host", "0.0.0.0"), int(settings.get("server.ws_port", 10000))):
         logger.info("WebSocket 服务器启动成功，监听端口 10000")

@@ -9,7 +9,12 @@
     "room": {
         "room_number_min": 100000,
         "room_number_max": 999999
-    },  
+    },
+
+    "user": {
+        "user_account_min": 100000000,
+        "user_account_max": 999999999,
+    },
 
     "log": {
         "log_dir": "./logs",
@@ -21,6 +26,7 @@
     },
 
     "frontend": {
+        "root_dir": "/home/shi/share/RoomTalk/frontend",
         "css_path": "/css//style.css",
         "js_path": "/js/app.js",
         "logo_path": "/assets/logo.png"
