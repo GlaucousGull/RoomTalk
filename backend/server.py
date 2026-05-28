@@ -5,8 +5,8 @@ import websockets
 import os
 import threading
 from websockets.exceptions import ConnectionClosed
-# from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
-from http.server import SimpleHTTPRequestHandler
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+# from http.server import SimpleHTTPRequestHandler
 from threading import Thread
 
 # 换成这个（Python 3.10 兼容）
@@ -21,6 +21,30 @@ from settings import settings
 init_project_logger()
 
 logger = logging.getLogger(__name__)
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# 拼接模板路径
+template_path = os.path.join(BASE_DIR, "nginx_template.conf")
+
+# 读取模板
+with open(settings.get("server.nginx_config_path", template_path), "r", encoding="utf-8") as fd:
+    content = fd.read()
+
+# 替换变量
+content = content.replace("{{DOMAIN}}", settings.get("server.domain"))
+content = content.replace("{{CERT_PEM}}", settings.get("server.cert_pem"))
+content = content.replace("{{CERT_KEY}}", settings.get("server.cert_key"))
+content = content.replace("{{HTTP_PORT}}", settings.get("server.http_port"))
+content = content.replace("{{WS_PORT}}", settings.get("server.ws_port"))
+
+# 写入 Nginx
+with open("/etc/nginx/conf.d/roomtalk.conf", "w", encoding="utf-8") as fd:
+    fd.write(content)
+
+# 重启
+logger.info("生成 nginx 配置成功，正在重启...")
+os.system("nginx -t && nginx -s reload")
 
 # 定义多进程 HTTP 服务器
 class ForkingHTTPServer(ForkingMixIn, HTTPServer):
@@ -52,37 +76,169 @@ class MyRequestHandler(SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         super().end_headers()
 
-    # GET 请求处理
+    # 处理 OPTIONS 预检请求
+    def do_options(self):
+        self.send_response(204)
+        # 必须加的跨域头
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
+    # 1000 通用响应
+    # 1001 登录成功
+    # 1002 登录失败
+    # 1003 注册成功
+    # 1004 注册失败
+    def send_json(self, code: int, body: dict):
+        """
+        自动拼接 http 响应报文
+        响应行 + 响应头 + 响应体
+        """
+        response = {
+            "code": code,
+            "body": body
+        }
+
+        response_str = json.dumps(response, ensure_ascii=False)
+
+        # 发送报文
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(response_str.encode("utf-8"))))
+        self.end_headers()
+        self.wfile.write(response_str.encode("utf-8"))
+
+    # POST 请求（登录+注册）
+    def do_POST(self):
+        try:
+            # 解析前端发来的请求体(fetch发来的json)
+            content_len = int(self.headers.get("Content-Length", 0))
+            post_body = self.rfile.read(content_len).decode("utf-8")
+            data = json.loads(post_body) if post_body else {}
+
+            # 路由
+            match self.path:
+                case "/api/login":
+                    self.handle_login(data)
+                case "/api/register":
+                    self.handle_register(data)
+                case _:
+                    self.send_json(1004, {"reason": "接口不存在"})
+                    logger.error("客户端请求了不存在的消息类型")
+        except Exception as e:
+            logger.error(f"POST请求异常: {e}", exc_info=True)
+            self.send_error(500)
+
+    # 请求处理
     def do_GET(self):
         try:
-            # 首页动态渲染
+            frontend_dir = get_frontend_dir()
+
+            # 首页/根路径：走你原来的模板替换逻辑
             if self.path == "/" or self.path == "/index.html":
-                # 读取配置
-                frontend_dir = get_frontend_dir()
                 html_path = os.path.join(frontend_dir, "index.html")
-
-
-                css_path = settings.get("frontend.css_path", "/css//style.scc")
+                css_path = settings.get("frontend.css_path", "/css/style.css")
                 js_path = settings.get("frontend.js_path", "/js/app.js")
 
-                # 读取模板
                 with open(html_path, "r", encoding="utf-8") as fd:
                     content = fd.read()
-                
-                # 替换占位符
                 content = content.replace("{{css_path}}", css_path)
                 content = content.replace("{{js_path}}", js_path)
 
-                # 返回给浏览器
                 self.send_response(200)
-                self.send_header("Content-type", "text/html; charset=utf-8")
+                self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.end_headers()
                 self.wfile.write(content.encode("utf-8"))
-                return 
-            return super().do_GET()
+                return
+
+            # 2. 所有其他 GET：通用静态文件处理（支持html/js/css/png等）
+            # 防路径穿越
+            if ".." in self.path or self.path.startswith("/../"):
+                self.send_error(403, "Forbidden")
+                return
+
+            # 拼接物理路径
+            rel_path = self.path.lstrip("/")
+            full_path = os.path.join(frontend_dir, rel_path)
+
+            if os.path.isfile(full_path):
+                # 按后缀返回正确 Content-Type
+                content_type = "application/octet-stream"
+                if full_path.endswith(".html"):
+                    content_type = "text/html; charset=utf-8"
+                elif full_path.endswith(".js"):
+                    content_type = "application/javascript; charset=utf-8"
+                elif full_path.endswith(".css"):
+                    content_type = "text/css; charset=utf-8"
+                elif full_path.endswith((".png", ".jpg", ".jpeg", ".gif")):
+                    content_type = "image/" + full_path.split(".")[-1]
+
+                with open(full_path, "rb") as f:
+                    self.send_response(200)
+                    self.send_header("Content-Type", content_type)
+                    self.end_headers()
+                    self.wfile.write(f.read())
+                return
+            else:
+                self.send_error(404, "File Not Found")
+                return
+
         except Exception as e:
             logger.error(f"请求异常 {e}", exc_info=True)
             self.send_error(500)
+
+    # 登录逻辑 /api/login
+    def handle_login(self, req_data):
+        """
+        前端传入：{account: 账号, password: 密码}
+        后端返回：code 1001成功 / 1002失败
+        """
+        account = req_data.get("account", "")
+        password = req_data.get("password", "")
+
+        print(f"login 当前进程 PID: {os.getpid()}")
+
+        if not account or not password:
+            self.send_json(1002, {"reason": "账号和密码不能为空"})
+            return
+
+        login_res = usermanager.login(account, password)
+        if login_res == "1":
+            self.send_json(1002, {"reason": "账号不存在"})
+        elif login_res == "2":
+            self.send_json(1002, {"reason": "密码错误"})
+        else:
+            # 登录成功
+            uid = login_res
+            username = usermanager.get_user_name(uid)
+            self.send_json(1001, {
+                "uid": uid,
+                "account": account,
+                "username": username
+            })
+
+    # 注册逻辑 /api/register
+    def handle_register(self, data):
+        """
+        前端传入：{username: 昵称, password: 密码}
+        后端返回：code 1003成功 / 1004失败
+        """
+
+        print(f"register 当前进程 PID: {os.getpid()}")
+        username = data.get("nickname", "")
+        password = data.get("password", "")
+
+        # 基础参数校验
+        if not username or not password:
+            self.send_json(1004, {"reason": "昵称和密码不能为空"})
+            return
+        # 
+        reg_res = usermanager.register(username, password)
+        self.send_json(1003, {
+            "account": reg_res["account"],
+            "msg": "注册成功，请使用账号登录"
+        })
 
 class HttpServer:
     @staticmethod
@@ -93,7 +249,8 @@ class HttpServer:
         logger.info(f"http id: {host} 监听端口 {port}")
 
         try:
-            server = ForkingHTTPServer((host, port), MyRequestHandler)
+            server = ThreadingHTTPServer((host, port), MyRequestHandler)
+            # server = ForkingHTTPServer((host, port), MyRequestHandler)
             logger.info(f"HTTP 静态服务启动成功 => http://{host}:{port}")
             logger.info(f"前端目录 => {get_frontend_dir()}")
             server.serve_forever()
@@ -104,24 +261,30 @@ class HttpServer:
 def run_http_server():
     HttpServer.run()
 
-# # 用户注册
-# async def handler_user_login(websocket, data):
-#     # 统一获取数据
-#     user_name = data.get()
-
 # 用户上线
-async def user_online(ws):
-    # 1. 生成UID（交给UserManager）
-    user_id = usermanager.generate_id()
-    user_name = f"用户_{user_id[-6:]}"  # uid前四位作为用户名后缀
+async def handler_user_login(websocket, data):
+    # 获取用户传递的 account
+    account = data.get("account")
+    user_id = data.get("user_id")
+    user_name = data.get("user_name")
 
-    # 2. 用户上线
-    usermanager.user_online(user_id, user_name, ws)
+    # 检查用户账号和uid是否匹配
+    if not usermanager.is_account_to_uid(account, user_id):
+        await websocket.send(json.dumps({
+        "type": "init_user_fail",
+        "data": {
+            "msg": "账号异常"
+        }
+    }))
 
-    # 3. 把UID发给前端
-    await ws.send(json.dumps({
+    # 用户上线
+    usermanager.user_online(user_id, websocket)
+
+    # 把UID发给前端
+    await websocket.send(json.dumps({
         "type": "init_user",
         "data": {
+            "account": account,
             "user_id": user_id,
             "user_name": user_name
         }
@@ -505,9 +668,6 @@ async def handler(websocket):
     client_addr = websocket.remote_address
     logger.info(f"客户端 {client_addr} 完成 WebSocket 握手，已连接")
 
-    # websocket连接建立后的处理
-    await user_online(websocket)
-
     try:
         async for message in websocket:
             # 解析前端发来的请求
@@ -518,8 +678,8 @@ async def handler(websocket):
             logger.info(f"用户发送指令 {msg_type}")
 
             match msg_type:
-                # case "user_login":
-                #     await handler_user_login(websocket, msg_data)
+                case "user_login":
+                    await handler_user_login(websocket, msg_data)
                 case "synchro_room_list":
                     await handler_sync_room_list(websocket, msg_data)
                 case "create_room":

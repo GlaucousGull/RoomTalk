@@ -1,12 +1,13 @@
-import uuid
 import logging
-import random
-from settings import settings
 
-from utils import init_project_logger, BiDict
+
+import account_manager
+import user_connection_manager
+import user_info_manager
+from settings import settings
+from utils import init_project_logger
 
 init_project_logger()
-
 logger = logging.getLogger(__name__)
 
 class UserManager:
@@ -16,108 +17,79 @@ class UserManager:
         logger.error("禁止创建 userManager 对象，请使用 .instance")
 
     def _init(self):
-        # 用户列表
-        # key: user_id
-        # value: {
-        #   "user_name": xxx,
-        #   "ws": websocket | None,
-        #   "online": True/False
-        # }
-        self.users = {}
-
-        # 用户账号登录体系
-        self.account_map = {}
-
-        # 用户账号和uid的双向映射
-        self.account_uid_map = BiDict()
+        # logger.debug("UserManager 被初始化")
+        # 引入三大用户模块
+        self.account = account_manager.AccountManager()                     # 用户账号
+        self.info = user_info_manager.UserInfoManager()                     # 用户信息
+        self.connection = user_connection_manager.UserConnectionManager()   # 用户连接
 
     @classmethod
     def instance(cls):
         if cls.__instance is None:
             cls.__instance = object.__new__(cls)
             cls.__instance._init()
+            # logger.debug(f"instance 调用 id = {id(cls.__instance)}")
         return cls.__instance
 
-    # 生成用户唯一id
-    def generate_id(self) -> str:
-        return str(uuid.uuid4())
-    
-    # 生成用户唯一账号
-    def generate_account(self) -> str:
-        while True:
-            account = random.randint(int(settings.get("user_account_min", 100000000)), int(settings.get("user_account_max", 999999999)))
-            if account not in self.account_map:
-                return str(account)
+
             
     # 用户注册
     def register(self, user_name: str, password: str) -> dict:
-        account = self.generate_account()
-        uid = self.generate_id()
+        ret = self.account.register(password=password)
 
-        self.account_map[account] = {
-            "uid": uid,
-            "user_name": user_name,
-            "password": password
-        }
+        acc, uid = ret["account"], ret["uid"]
 
-        self.account_uid_map.set(account, password)
+        # 注册用户信息
+        self.info.set_user_info(uid, acc, user_name)
 
-        logger.info(f"注册成功：账号 = {account}, 用户名 = {user_name}, uid = {uid}")
+        # logger.debug(f"register 调用 id = {id(self.account)}")
+        
+        logger.info(f"注册成功：账号 =  {acc}, 用户名 = {user_name}, uid = {uid}")
         return {
-            "account": account,
+            "account": acc,
             "uid": uid,
             "user_name": user_name
         }
 
     # 用户登录
     def login(self, account: str, password: str) -> str | None:
-        user = self.account_map[account]
-        if not user or password != user["password"]:
-            return None
+        # 账号验证
+        # logger.debug(f"login 调用 id = {id(self.account)}")
+
+        state =  self.account.login(account, password)
+        if state != 0:
+            logger.info(f"登录态返回 {state}")
+            return str(state)
         
-        return user["uid"]
+        # 获取账号uid
+        uid = self.account.get_uid(account)
+
+        return uid
     
-    # 根据账号查找业务id
-    def get_uid_by_account(self, uid):
-        return self.account_uid_map.get_by_value(uid)
+    # 检查账号和uid的匹配情况
+    def is_account_to_uid(self, account: str, uid: str) -> bool:
+        return self.account.get_uid(account) == uid
+    
+    # 连接套接字修该
+    def user_online(self, uid: str, ws):
+        self.connection.user_online(uid, ws)
 
-    # 根据业务id查找账号
-    def get_account_by_uid(self, account):
-        return self.account_uid_map.get_by_key(account)
-
-    # 用户上线（如果用户不存在就创建，存在就更新状态）
-    def user_online(self, user_id: str, user_name: str, ws):
-        self.users[user_id] = {
-            "user_name": user_name,
-            "ws": ws,
-            "online": True  # 标记在线
-        }
-        logger.info(f"用户上线 {user_id}: {user_name}")
-
-    # 用户离线（只修改状态，不删除！）
-    def user_offline(self, user_id: str):
-        if user_id in self.users:
-            self.users[user_id]["ws"] = None  # 清空连接
-            self.users[user_id]["online"] = False  # 只改在线状态
-            logger.info(f"用户离线：{user_id} | {self.users[user_id]['user_name']}")
+    # 用户离线
+    def user_offline(self, uid: str):
+        self.connection.user_offline(uid)
+        logger.info(f"用户uid {uid} 离线")
 
     # 判断用户是否在线
-    def is_online(self, user_id: str):
-        return self.users.get(user_id, {}).get("online", False)
+    def is_online(self, uid: str):
+        return self.connection.is_online(uid)
 
     # 根据 user_id 获取用户名
-    def get_user_name(self, user_id: str) -> str:
-        user = self.users.get(user_id)
-        if user:
-            return user["user_name"]
-        return "未知用户"
+    def get_user_name(self, uid: str) -> str:
+        return self.info.get_user_name(uid)
 
     # 获取用户的 websocket（用于发消息）
-    def get_user_ws(self, user_id: str):
-        user = self.users.get(user_id)
-        if user and user["online"]:
-            return user["ws"]
-        return None
+    def get_user_ws(self, uid: str):
+        return self.connection.get_user_ws(uid)
 
 # 全局用户管理者
 usermanager = UserManager.instance()

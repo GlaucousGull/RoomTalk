@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>登录/注册</title>
+    <link rel="stylesheet" href="../css/login.css">
+</head>
+<body>
+    <div class="auth-wrap">
+        <!-- 登录面板 -->
+        <div id="loginPanel" class="panel">
+            <h2>账号登录</h2>
+            <div class="input-item">
+                <input type="text" id="loginUser" placeholder="请输入9位数字账号">
+            </div>
+            <div class="input-item">
+                <input type="password" id="loginPwd" placeholder="请输入密码">
+            </div>
+            <button class="submit-btn">登录</button>
+            <div class="tip-text">
+                还没有账号？<span class="switch-btn">立即注册</span>
+            </div>
+        </div>
+
+        <!-- 注册面板 -->
+        <div id="registerPanel" class="panel hidden">
+            <h2>账号注册</h2>
+            <div class="input-item">
+                <input type="text" id="regUser" placeholder="请设置用户名">
+            </div>
+            <div class="input-item">
+                <input type="password" id="regPwd" placeholder="请设置密码">
+            </div>
+            <button class="submit-btn">注册</button>
+            <div class="tip-text">
+                已有账号？<span class="switch-btn">返回登录</span>
+            </div>
+        </div>
+
+        <!-- 注册成功面板 -->
+        <div id="registerSuccessPanel" class="panel hidden">
+            <h2>注册成功</h2>
+            <div class="input-item">
+                你的登录账号：<span id="showAccount"></span>
+                <button id="copyBtn">复制账号</button>
+            </div>
+            <p>请使用【9位数字账号】进行登录</p>
+            <p>账号不可修改，请妥善保管</p>
+            <button class="submit-btn">前往登录</button>
+        </div>
+    </div>
+
+    <script src="../js/login.js"></script>
+</body>
+</html>

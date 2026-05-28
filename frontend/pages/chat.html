@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>RoomTalk 聊天室主页</title>
+    <link rel="stylesheet" href="../css/chat.css">
+</head>
+<body>
+
+<!-- 用户注册 -->
+
+<!-- 最外层布局容器 -->
+<div class="app-container">
+
+    <!-- 左侧：房间列表 -->
+    <div class="left-sidebar" id="leftSidebar">
+        <div id="userInfoTag" class="user-info-tag">
+            <div id="userAvater" class="avatar">
+                <span id="defaultAvatarIcon">👤</span>
+            </div>
+            <div class="user-text">
+                <div id="displayUserName" class="user-name">加载中...</div>
+                <div id="displayUserId" class="user-id"></div>
+            </div>
+        </div>
+
+        <button id="createRoomBtn">创建房间</button>
+        <button id="refreshBtn">刷新房间</button>
+
+        <div class="room_list">
+            <h3>房间列表</h3>
+            <ul id="room_list"></ul>
+        </div>
+    </div>
+
+    <!-- 可拖动分割线 -->
+    <div class="drag-divider" id="dragDivider"></div>
+
+    <!-- 右侧：聊天区域 -->
+    <div id="rightChatArea" class="right-chat-area">
+        <!-- 顶部标题栏 -->
+        <div id="chatContainer" class="chat-container">
+            <div class="room-title">
+                <div class="room-info">
+                    <!-- span 由 JS 动态填充 -->
+                    房间：<span id="roomName"></span>
+                    <span id="userCount"></span>
+                </div>
+                <!-- 视频通话控件 -->
+                <div class="room-controls">
+                    <!-- 音视频通话 -->
+                    <button id="openCallSelectBtn" class="call-select-btn">
+                        📹 发起视频通话
+                    </button>
+                </div>
+            </div>
+            <!-- 聊天历史 -->
+            <div id="chatHistory" class="chat-history"></div>
+            <!-- 输入框 -->
+            <div class="message-input-bar">
+                <input type="text" id="msgInput" placeholder="输入消息...">
+                <button id="sendBtn">发送</button>
+            </div>
+        </div>
+
+        <!-- 选择通话用户弹窗，默认隐藏 -->
+        <div id = "callUserModal">
+            <h4>选择通话好友</h4>
+            <ul id="onlineUserList"></ul>
+            <button id="closeCallModal">取消</button>
+        </div>
+    </div>
+</div>
+
+<!-- 来电邀请弹窗 -->
+<div id="callInviteModal" style="display: none;">
+    <!-- 全屏半透明遮罩 -->
+    <div class="call-invite-mask"></div>
+    <!-- 居中弹窗 -->
+    <div class="call-invite-box">
+        <div class="call-invite-title">📹 视频通话邀请</div>
+        <div class="call-invite-user" id="inviteUserName">邀请人：加载中...</div>
+        <div class="call-invite-room" id="inviteText">房间：加载中...</div>
+        <div class="call-invite-buttons">
+            <button id="agreeCallBtn" class="btn-agree">同意</button>
+            <button id="refuseCallBtn" class="btn-refuse">拒绝</button>
+        </div>
+    </div>
+</div>
+
+<!-- 视频通话容器 -->
+<div id="videoContainer">
+    <!-- 对方视屏 -->
+    <video id="remoteVideo" autoplay playsinline></video>
+    <!-- 自己视频 -->
+    <video id="localVideo" autoplay playsinline muted></video>
+
+    <!-- 挂断按钮，在通话视频层显示 -->
+    <div class="call-controls">
+        <button id="hangupBtn" class="hangup-btn">📞 挂断</button>
+    </div>
+</div>
+
+<!-- 私域房间密码弹窗 -->
+<div id="pwdModal" class="room-pwd-modal">
+    <div class="pwd-box">
+        <h4>私域房间，请输入密码</h4>
+        <input type="password" placeholder="输入密码" id="roomPwdInput">
+        <button id="confirmPwdBtn">确认加入</button>
+        <button id="cancelPwdBtn">取消</button>
+    </div>
+</div>
+
+<!-- 创建房间弹窗 -->
+<div id="createModal" class="modal">
+    <div class="modal-content">
+        <p>创建新房间</p>
+        <input type="text" id="roomNameInput" placeholder="房间名称（可选）">
+        <label>房间类型选择：</label>
+        <select id="roomTypeSelBtn">
+            <option value="0" selected>公域</option>
+            <option value="1">私域</option>
+        </select>
+
+        <div id="roomPasswordInputWrap" style="display: none;">
+            <label>房间密码</label>
+            <input type="password" id="roomPasswordInput" placeholder="请输入私域房间密码">
+        </div>
+        <button class="confirmBtn" onclick="createRoom()">确认创建</button>
+        <button class="cancelBtn" onclick="closeModal()">取消</button>
+    </div>
+</div>
+
+<script src="../js/chat.js"></script>
+
+</body>
+</html>

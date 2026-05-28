@@ -3,7 +3,11 @@
         "host": "0.0.0.0",
         "http_port": "9000",
         "ws_port": "10000",
-        "public_url": "ws://"
+
+        "nginx_config_path": "/home/shi/share/RoomTalk/backend/nginx_template.conf",
+        "domain" : "roomtalk.shiroomtalk.asia",
+        "cert_pem" : "/etc/nginx/ssl/roomtalk.pem",
+        "cert_key" : "/etc/nginx/ssl/roomtalk.key"
     },
 
     "room": {
@@ -13,7 +17,7 @@
 
     "user": {
         "user_account_min": 100000000,
-        "user_account_max": 999999999,
+        "user_account_max": 999999999
     },
 
     "log": {
@@ -27,7 +31,7 @@
 
     "frontend": {
         "root_dir": "/home/shi/share/RoomTalk/frontend",
-        "css_path": "/css//style.css",
+        "css_path": "/css/common.css",
         "js_path": "/js/app.js",
         "logo_path": "/assets/logo.png"
     },
@@ -35,6 +39,6 @@
     "iceServers": [
         {"url": "stun:stun.qq.com"},
         {"url": "stun:stun.cloudflare.com"},
-        {"url":"stun:stun.l.google.com:19302"}
+        {"url": "stun:stun.l.google.com:19302"}
     ]
 }

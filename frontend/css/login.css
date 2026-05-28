@@ -1,0 +1,139 @@
+/* 全局样式重置和基础设置 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Microsoft YaHei", Arial, sans-serif;
+}
+
+body {
+    background-color: #f5f7fa;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+/* 外层容器，用于居中所有面板 */
+.auth-wrap {
+    width: 100%;
+    max-width: 400px;
+}
+
+/* 面板通用样式 */
+.panel {
+    background: #ffffff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+    width: 100%;
+}
+
+/* 核心隐藏类：添加此类的元素将被隐藏 */
+.hidden {
+    display: none;
+}
+
+/* 面板标题 */
+.panel h2 {
+    text-align: center;
+    margin-bottom: 30px;
+    color: #333333;
+    font-size: 24px;
+}
+
+/* 输入框容器 */
+.input-item {
+    margin-bottom: 20px;
+}
+
+.input-item input {
+    width: 100%;
+    padding: 12px 15px;
+    border: 1px solid #e6e6e6;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: border-color 0.3s;
+}
+
+.input-item input:focus {
+    outline: none;
+    border-color: #409eff;
+}
+
+/* 提交按钮 */
+.submit-btn {
+    width: 100%;
+    padding: 12px;
+    background-color: #409eff;
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.submit-btn:hover {
+    background-color: #3393e8;
+}
+
+/* 提示文字和切换按钮 */
+.tip-text {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 14px;
+    color: #666666;
+}
+
+.switch-btn {
+    color: #409eff;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.switch-btn:hover {
+    text-decoration: underline;
+}
+
+/* 注册成功面板样式 */
+#registerSuccessPanel h2 {
+    color: #67c23a;
+}
+
+.account-row {
+    margin: 25px 0;
+    font-size: 16px;
+    text-align: center;
+}
+
+#showAccount {
+    font-weight: bold;
+    color: #409eff;
+    margin: 0 5px;
+}
+
+#copyBtn {
+    margin-left: 10px;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    background: #f5f7fa;
+    color: #666;
+    border: 1px solid #e6e6e6;
+    border-radius: 4px;
+    transition: all 0.3s;
+}
+
+#copyBtn:hover {
+    background: #409eff;
+    color: #fff;
+    border-color: #409eff;
+}
+
+#registerSuccessPanel p {
+    text-align: center;
+    color: #666;
+    margin: 10px 0;
+}
