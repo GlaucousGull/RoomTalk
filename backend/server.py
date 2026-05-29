@@ -197,7 +197,7 @@ class MyRequestHandler(SimpleHTTPRequestHandler):
         account = req_data.get("account", "")
         password = req_data.get("password", "")
 
-        print(f"login 当前进程 PID: {os.getpid()}")
+        # print(f"login 当前进程 PID: {os.getpid()}")
 
         if not account or not password:
             self.send_json(1002, {"reason": "账号和密码不能为空"})
@@ -266,7 +266,7 @@ async def handler_user_login(websocket, data):
     # 获取用户传递的 account
     account = data.get("account")
     user_id = data.get("user_id")
-    user_name = data.get("user_name")
+    # user_name = data.get("user_name")
 
     # 检查用户账号和uid是否匹配
     if not usermanager.is_account_to_uid(account, user_id):
@@ -279,6 +279,10 @@ async def handler_user_login(websocket, data):
 
     # 用户上线
     usermanager.user_online(user_id, websocket)
+
+    user_name = usermanager.get_user_name(user_id)
+
+    logger.debug(f"用户上线验证成功 account = {account}, user_id = {user_id}, user_name = {user_name}")
 
     # 把UID发给前端
     await websocket.send(json.dumps({

@@ -40,7 +40,7 @@ class UserManager:
         acc, uid = ret["account"], ret["uid"]
 
         # 注册用户信息
-        self.info.set_user_info(uid, acc, user_name)
+        self.info.set_user_info(acc, uid, user_name)
 
         # logger.debug(f"register 调用 id = {id(self.account)}")
         
@@ -66,6 +66,10 @@ class UserManager:
 
         return uid
     
+    # 设置用户信息
+    def set_user_info(self, account: str, uid: str, user_name: str):
+        self.info.set_user_info(account, uid, user_name)
+
     # 检查账号和uid的匹配情况
     def is_account_to_uid(self, account: str, uid: str) -> bool:
         return self.account.get_uid(account) == uid

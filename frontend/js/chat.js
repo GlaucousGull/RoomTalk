@@ -34,6 +34,11 @@ function connectWebSocket() {
             }
         }));
 
+        console.log(
+            "account = ", localStorage.getItem("account"),
+            "user_id = ", localStorage.getItem("uid"),
+            "user_name = ", localStorage.getItem("username"))
+
         // 发送房间同步指令
         ws.send(JSON.stringify({ type: "synchro_room_list" }));
 
